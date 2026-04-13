@@ -3,14 +3,20 @@ import google.generativeai as genai
 import docx
 
 # 1. BRAIN SETUP
-# Replace with your actual key from Google AI Studio
-genai.configure(api_key="YOUR_API_KEY_HERE")
-model = genai.GenerativeModel('gemini-1.5-pro')
+GEMINI_KEY = "AIzaSyADs2gZ5Bphaq33JgqKATiZceN1VJA-_wY"
 
-# Helper function to read Word files
+try:
+    genai.configure(api_key=GEMINI_KEY)
+    model = genai.GenerativeModel('models/gemini-1.5-pro')
+except Exception as e:
+    st.error(f"Setup Error: {e}")
+
+# Helper for Word docs
 def read_docx(file):
     doc = docx.Document(file)
     return '\n'.join([p.text for p in doc.paragraphs])
+
+
 
 # 2. SIDEBAR (The "Editor Settings")
 with st.sidebar:
@@ -30,47 +36,56 @@ with st.sidebar:
 
 # 3. MAIN INTERFACE
 st.title("✍️ Rainey's Author Suite")
-uploaded_file = st.file_uploader("Upload Manuscript (.docx or .txt)", type=['docx', 'txt'])
 
-if uploaded_file:
-    # Read the file
-    if uploaded_file.name.endswith('.docx'):
-        text_to_edit = read_docx(uploaded_file)
-    else:
-        text_to_edit = uploaded_file.read().decode("utf-8")
 
-    # Show the stats/cost (using the total tokens)
-    token_count = model.count_tokens(text_to_edit).total_tokens
-    st.info(f"📊 Manuscript Stats: {token_count:,} tokens identified.")
+# 1. The File Uploader
+uploaded_file = st.file_uploader("Upload Manuscript", type=['docx', 'txt'])
 
-    target_lang = st.selectbox("Translate to:", ["No Translation", "English", "American English", "British English", "Canadian English","Spanish", "French", "German", "Italian", "Portuguese", "Dutch", "Japanese", "Chinese", "Korean", "Arabic"])
+if uploaded_file is not None:
+    # Use 'Session State' to remember the text so it doesn't disappear on rerun
+    if "manuscript_text" not in st.session_state:
+        if uploaded_file.name.endswith('.docx'):
+            st.session_state.manuscript_text = read_docx(uploaded_file)
+        else:
+            st.session_state.manuscript_text = uploaded_file.read().decode("utf-8")
 
-    if st.button("🚀 Start Professional Edit"):
-        with st.spinner("Processing your book..."):
-            # This is where we plug in the Sidebar settings
-            prompt = f"""
-            Act as a professional book editor and polyglot. 
-            
-            1. Identify the source language of the text.
-            2. Edit for flow, grammar, and style using the {writing_tone} tone.
-            3. Use {english_type} English conventions unless a different target language is selected.
-            4. If the user selected a target language ({target_lang}) other than 'No Translation', 
-               translate the final polished version into that language.
-            
-            Special Instructions: {special_notes}
+    # Now use the text from the "Memory" (Session State)
+    text_to_edit = st.session_state.manuscript_text
 
-            Manuscript:
-            {text_to_edit}
-        # Calculate Stats
-        word_count = len(text_to_edit.split())
-        reading_time = word_count // 250  # Average reading speed
+    # B. CALCULATE stats
+    word_count = len(text_to_edit.split())
+    # ... rest of your code ...
     
-        # Display Stats in three nice columns
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Word Count", f"{word_count:,}")
-        col2.metric("Est. Reading Time", f"{reading_time} min")
-        col3.metric("Tokens", f"{token_count:,}")
+    try:
+        # Use the full model path to avoid that 404 from earlier
+        token_count = model.count_tokens(text_to_edit).total_tokens
+    except:
+        token_count = "Calculated by AI"
+
+    # C. DISPLAY (Must be at the same indent level as the calculations!)
+    st.info(f"📊 Manuscript Stats: {word_count:,} words | Tokens: {token_count}")
+
+    # D. THE BUTTON (Also inside the gatekeeper)
+    if st.button("🚀 Start Professional Edit"):
+        # ... your editing code ...
+            
+            # This 'f' and the triple quotes are the most important part!
+            prompt = f"""
+            Act as a professional book editor. 
+            
+            1. Tone: {writing_tone}
+            2. Dialect: {english_type} English
+            3. Special Instructions: {special_notes}
+            
+            Please edit the following manuscript:
+            {text_to_edit}
             """
+
+            # This line sends that big block of text to Gemini
+            response = model.generate_content(prompt)
+            
+            st.subheader("Edited Preview")
+            st.write(response.text)
             
             response = model.generate_content(prompt)
             st.subheader("Edited Preview:")
